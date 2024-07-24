@@ -49,7 +49,8 @@ def decode_map_features_from_proto(map_features):
         'road_edge': [],
         'stop_sign': [],
         'crosswalk': [],
-        'speed_bump': []
+        'speed_bump': [],
+        'driveway': []
     }
     polylines = []
 
@@ -129,7 +130,12 @@ def decode_map_features_from_proto(map_features):
             cur_polyline = np.concatenate((cur_polyline[:, 0:3], cur_polyline_dir, cur_polyline[:, 3:]), axis=-1)
 
             map_infos['speed_bump'].append(cur_info)
-
+        elif cur_data.driveway.ByteSize() > 0:
+            global_type = polyline_type['TYPE_DRIVEWAY']
+            cur_polyline = np.stack([np.array([point.x, point.y, point.z, global_type]) for point in cur_data.driveway.polygon], axis=0)
+            cur_polyline_dir = get_polyline_dir(cur_polyline[:, 0:3])
+            cur_polyline = np.concatenate((cur_polyline[:, 0:3], cur_polyline_dir, cur_polyline[:, 3:]), axis=-1)
+            map_infos['driveway'].append(cur_info)
         else:
             print(cur_data)
             raise ValueError
