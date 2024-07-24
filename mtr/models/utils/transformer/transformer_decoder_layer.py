@@ -22,7 +22,7 @@ class TransformerDecoderLayer(nn.Module):
 
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1,
                  activation="relu", normalize_before=False, keep_query_pos=False,
-                 rm_self_attn_decoder=False, use_local_attn=False):
+                 rm_self_attn_decoder=False, use_local_attn=False, use_attention_kernel=True):
         super().__init__()
         # Decoder Self-Attention
         if not rm_self_attn_decoder:
@@ -47,7 +47,8 @@ class TransformerDecoderLayer(nn.Module):
         self.use_local_attn = use_local_attn
 
         if self.use_local_attn:
-            self.cross_attn = MultiheadAttentionLocal(d_model*2, nhead, dropout=dropout, vdim=d_model, without_weight=True)
+            self.cross_attn = MultiheadAttentionLocal(d_model*2, nhead, dropout=dropout, vdim=d_model, without_weight=True,
+                                                      use_attention_kernel=use_attention_kernel)
         else:
             self.cross_attn = MultiheadAttention(d_model*2, nhead, dropout=dropout, vdim=d_model, without_weight=True)
 

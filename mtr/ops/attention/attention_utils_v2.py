@@ -188,3 +188,18 @@ class AttentionValueComputation(Function):
 
 
 attention_value_computation = AttentionValueComputation.apply
+
+
+@torch.compile
+def attention_weight_computation_python(query_batch_cnt: torch.Tensor,
+                key_batch_cnt: torch.Tensor,
+                index_pair_batch: torch.Tensor,
+                index_pair: torch.Tensor,
+                query_features: torch.Tensor,
+                key_features: torch.Tensor):
+    # Not memory efficient, but should be fine for inference.
+    absolute_idx = index_pair_batch.unsqueeze(1) + index_pair
+    key_view = key_features[absolute_idx] # (total_query_num, local_size, nhead, hdim)
+    key_view[absolute_idx == -1] = 0.0
+    # query_features is (total_query_num, nhead, hdim)
+    return torch.einsum('qhd,qlhd->qlh', query_features, key_view) # (total_query_num, local_size, nhead)

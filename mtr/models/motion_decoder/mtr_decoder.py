@@ -28,6 +28,7 @@ class MTRDecoder(nn.Module):
         self.d_model = self.model_cfg.D_MODEL
         self.num_decoder_layers = self.model_cfg.NUM_DECODER_LAYERS
 
+        use_attention_kernel = self.model_cfg.get('USE_ATTN_KERNEL', True)
         # define the cross-attn layers
         self.in_proj_center_obj = nn.Sequential(
             nn.Linear(in_channels, self.d_model),
@@ -40,7 +41,8 @@ class MTRDecoder(nn.Module):
             nhead=self.model_cfg.NUM_ATTN_HEAD,
             dropout=self.model_cfg.get('DROPOUT_OF_ATTN', 0.1),
             num_decoder_layers=self.num_decoder_layers,
-            use_local_attn=False
+            use_local_attn=False,
+            use_attention_kernel=use_attention_kernel,
         )
 
         map_d_model = self.model_cfg.get('MAP_D_MODEL', self.d_model)
@@ -50,7 +52,8 @@ class MTRDecoder(nn.Module):
             nhead=self.model_cfg.NUM_ATTN_HEAD,
             dropout=self.model_cfg.get('DROPOUT_OF_ATTN', 0.1),
             num_decoder_layers=self.num_decoder_layers,
-            use_local_attn=True
+            use_local_attn=True,
+            use_attention_kernel=use_attention_kernel,
         )
         if map_d_model != self.d_model:
             temp_layer = nn.Linear(self.d_model, map_d_model)
@@ -95,7 +98,7 @@ class MTRDecoder(nn.Module):
             c_in=hidden_dim * 2, mlp_channels=[hidden_dim, hidden_dim, hidden_dim], ret_before_act=True, without_norm=True
         )
 
-    def build_transformer_decoder(self, in_channels, d_model, nhead, dropout=0.1, num_decoder_layers=1, use_local_attn=False):
+    def build_transformer_decoder(self, in_channels, d_model, nhead, dropout=0.1, num_decoder_layers=1, use_local_attn=False, use_attention_kernel=True):
         in_proj_layer = nn.Sequential(
             nn.Linear(in_channels, d_model),
             nn.ReLU(),
@@ -105,7 +108,7 @@ class MTRDecoder(nn.Module):
         decoder_layer = transformer_decoder_layer.TransformerDecoderLayer(
             d_model=d_model, nhead=nhead, dim_feedforward=d_model * 4, dropout=dropout,
             activation="relu", normalize_before=False, keep_query_pos=False,
-            rm_self_attn_decoder=False, use_local_attn=use_local_attn
+            rm_self_attn_decoder=False, use_local_attn=use_local_attn, use_attention_kernel=use_attention_kernel
         )
         decoder_layers = nn.ModuleList([copy.deepcopy(decoder_layer) for _ in range(num_decoder_layers)])
         return in_proj_layer, decoder_layers

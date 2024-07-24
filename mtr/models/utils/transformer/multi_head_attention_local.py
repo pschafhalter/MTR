@@ -50,7 +50,8 @@ class MultiheadAttentionLocal(nn.Module):
         dropout=0.0,
         without_weight=False, 
         version='v2', 
-        vdim=None
+        vdim=None,
+        use_attention_kernel=True,
     ):
         super(MultiheadAttentionLocal, self).__init__()
         self.embed_dim = embed_dim
@@ -65,6 +66,9 @@ class MultiheadAttentionLocal(nn.Module):
         assert version in ['v1', 'v2'], 'only attention_utils_v1 and attention_utils_v2 are available.'
         # self.attention_utils = attention.__all__[version]
         self.attention_version = version
+        if not use_attention_kernel:
+            assert version == 'v2', 'only support python attention in v2.'
+        self.use_cuda_kernels = use_attention_kernel
 
         self.in_proj_weight = Parameter(torch.empty(3 * embed_dim, embed_dim))
 
@@ -186,10 +190,16 @@ class MultiheadAttentionLocal(nn.Module):
         v = v.contiguous().view(-1, self.num_heads, v_head_dim)
 
         # compute attention weight.
-        attn_output_weights = attention.__all__[self.attention_version].attention_weight_computation(
-            query_batch_cnt, key_batch_cnt, index_pair_batch, index_pair,
-            q, k)  # total_query_len, max_memory_len, num_heads
-        assert list(attn_output_weights.size()) == [total_query_len, max_memory_len, self.num_heads]
+        if self.use_cuda_kernels:
+            attn_output_weights = attention.__all__[self.attention_version].attention_weight_computation(
+                query_batch_cnt, key_batch_cnt, index_pair_batch, index_pair,
+                q, k)  # total_query_len, max_memory_len, num_heads
+            assert list(attn_output_weights.size()) == [total_query_len, max_memory_len, self.num_heads]
+        else:
+            attn_output_weights = attention.attention_utils_v2.attention_weight_computation_python(
+                query_batch_cnt, key_batch_cnt, index_pair_batch, index_pair, q, k
+            )
+        # print(torch.allclose(attn_output_weights, attn_output_weights2, rtol=1e-5, atol=1e-6))
 
         if ctx_rpe_key is not None:
             rpe_attn_weight = ctx_rpe_key(rpe_distance, k, scaling,

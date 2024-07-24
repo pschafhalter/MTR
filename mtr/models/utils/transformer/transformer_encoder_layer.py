@@ -31,12 +31,14 @@ def _get_activation_fn(activation):
 class TransformerEncoderLayer(nn.Module):
 
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1,
-                 activation="relu", normalize_before=False, use_local_attn=False):
+                 activation="relu", normalize_before=False, use_local_attn=False,
+                 use_attention_kernel=True):
         super().__init__()
         self.use_local_attn = use_local_attn
         
         if self.use_local_attn:
-            self.self_attn = MultiheadAttentionLocal(d_model, nhead, dropout=dropout) 
+            self.self_attn = MultiheadAttentionLocal(d_model, nhead, dropout=dropout,
+                                                     use_attention_kernel=use_attention_kernel) 
         else:
             self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout)
         

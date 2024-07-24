@@ -8,11 +8,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-
-from mtr.models.utils.transformer import transformer_encoder_layer, position_encoding_utils
 from mtr.models.utils import polyline_encoder
-from mtr.utils import common_utils
+from mtr.models.utils.transformer import (
+    position_encoding_utils,
+    transformer_encoder_layer,
+)
 from mtr.ops.knn import knn_utils
+from mtr.utils import common_utils
 
 
 class MTREncoder(nn.Module):
@@ -44,11 +46,14 @@ class MTREncoder(nn.Module):
                 nhead=self.model_cfg.NUM_ATTN_HEAD,
                 dropout=self.model_cfg.get('DROPOUT_OF_ATTN', 0.1),
                 normalize_before=False,
-                use_local_attn=self.use_local_attn
+                use_local_attn=self.use_local_attn,
+                use_attention_kernel=self.model_cfg.get('USE_ATTN_KERNEL', True)
             ))
 
         self.self_attn_layers = nn.ModuleList(self_attn_layers)
         self.num_out_channels = self.model_cfg.D_MODEL
+
+        self.use_knn_kernel = self.model_cfg.get('USE_KNN_KERNEL', True)
 
     def build_polyline_encoder(self, in_channels, hidden_dim, num_layers, num_pre_layers=1, out_channels=None):
         ret_polyline_encoder = polyline_encoder.PointNetPolylineEncoder(
@@ -60,10 +65,12 @@ class MTREncoder(nn.Module):
         )
         return ret_polyline_encoder
 
-    def build_transformer_encoder_layer(self, d_model, nhead, dropout=0.1, normalize_before=False, use_local_attn=False):
+    def build_transformer_encoder_layer(self, d_model, nhead, dropout=0.1, normalize_before=False, use_local_attn=False,
+                                        use_attention_kernel=True):
         single_encoder_layer = transformer_encoder_layer.TransformerEncoderLayer(
             d_model=d_model, nhead=nhead, dim_feedforward=d_model * 4, dropout=dropout,
-            normalize_before=normalize_before, use_local_attn=use_local_attn
+            normalize_before=normalize_before, use_local_attn=use_local_attn,
+            use_attention_kernel=use_attention_kernel
         )
         return single_encoder_layer
 
@@ -118,9 +125,14 @@ class MTREncoder(nn.Module):
         batch_offsets = common_utils.get_batch_offsets(batch_idxs=batch_idxs, bs=batch_size).int()  # (batch_size + 1)
         batch_cnt = batch_offsets[1:] - batch_offsets[:-1]
 
-        index_pair = knn_utils.knn_batch_mlogk(
-            x_pos_stack, x_pos_stack,  batch_idxs, batch_offsets, num_of_neighbors
-        )  # (num_valid_elems, K)
+        if self.use_knn_kernel:
+            index_pair = knn_utils.knn_batch_mlogk(
+                x_pos_stack, x_pos_stack,  batch_idxs, batch_offsets, num_of_neighbors
+            )  # (num_valid_elems, K)
+        else:
+            index_pair = knn_utils.knn_batch_python(
+                x_pos_stack, x_pos_stack,  batch_idxs, batch_offsets, num_of_neighbors
+            )  # (num_valid_elems, K)
 
         # positional encoding
         pos_embedding = position_encoding_utils.gen_sineembed_for_position(x_pos_stack[None, :, 0:2], hidden_dim=d_model)[0]
